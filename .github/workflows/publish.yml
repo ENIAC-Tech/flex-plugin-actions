@@ -1,0 +1,163 @@
+name: Publish FlexStudio Plugin
+
+on:
+  workflow_call:
+    inputs:
+      flexcli-version:
+        description: "Version of @eniac/flexcli to use"
+        type: string
+        required: false
+        default: "latest"
+    secrets:
+      webhook-secret:
+        description: "HMAC secret for notifying the FlexStudio marketplace server"
+        required: true
+
+jobs:
+  # ── Detect manifest ──────────────────────────────────────────────────────────
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      native: ${{ steps.read.outputs.native }}
+      platforms: ${{ steps.read.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read manifest
+        id: read
+        run: |
+          NATIVE=$(node -e "const m=require('./manifest.json'); console.log(m.native === true ? 'true' : 'false')")
+          PLATFORMS=$(node -e "
+            const m=require('./manifest.json');
+            const p = m.native ? (m.platforms || ['win32-x64','darwin-arm64','darwin-x64','linux-x64']) : ['universal'];
+            console.log(JSON.stringify(p));
+          ")
+          echo "native=$NATIVE" >> "$GITHUB_OUTPUT"
+          echo "platforms=$PLATFORMS" >> "$GITHUB_OUTPUT"
+
+  # ── Build (universal — non-native plugins) ───────────────────────────────────
+  build-universal:
+    needs: detect
+    if: needs.detect.outputs.native == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install flexcli
+        run: npm install -g @eniac/flexcli@${{ inputs.flexcli-version }}
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack
+        run: flexcli plugin-v2 pack
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-universal
+          path: "*.flexplugin"
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.flexplugin"
+
+  # ── Build (native — per-platform matrix) ────────────────────────────────────
+  build-native:
+    needs: detect
+    if: needs.detect.outputs.native == 'true'
+    strategy:
+      matrix:
+        include:
+          - platform: win32-x64
+            os: windows-latest
+          - platform: darwin-arm64
+            os: macos-latest
+          - platform: darwin-x64
+            os: macos-13
+          - platform: linux-x64
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install flexcli
+        run: npm install -g @eniac/flexcli@${{ inputs.flexcli-version }}
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack
+        run: flexcli plugin-v2 pack --platform ${{ matrix.platform }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.platform }}
+          path: "*.flexplugin"
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.flexplugin"
+
+  # ── Notify marketplace server ────────────────────────────────────────────────
+  notify:
+    needs: [detect, build-universal, build-native]
+    if: |
+      always() &&
+      (needs.build-universal.result == 'success' || needs.build-universal.result == 'skipped') &&
+      (needs.build-native.result == 'success' || needs.build-native.result == 'skipped') &&
+      (needs.build-universal.result == 'success' || needs.build-native.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify marketplace
+        env:
+          WEBHOOK_SECRET: ${{ secrets.webhook-secret }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          PAYLOAD=$(node -e "
+            const crypto = require('crypto');
+            const payload = JSON.stringify({
+              repo_url: process.env.REPO_URL,
+              tag: process.env.RELEASE_TAG,
+              delivery_id: process.env.DELIVERY_ID,
+              timestamp: Date.now()
+            });
+            const sig = crypto
+              .createHmac('sha256', process.env.WEBHOOK_SECRET)
+              .update(payload)
+              .digest('hex');
+            console.log(JSON.stringify({ payload, sig }));
+          ")
+          BODY=$(echo "$PAYLOAD" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.payload)")
+          SIG=$(echo "$PAYLOAD" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.sig)")
+
+          curl -fsSL \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Flex-Signature: sha256=$SIG" \
+            -H "X-Flex-Delivery: $DELIVERY_ID" \
+            -d "$BODY" \
+            https://api.flexstudio.app/plugins/webhook
