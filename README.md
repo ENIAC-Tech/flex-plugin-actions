@@ -18,6 +18,7 @@ jobs:
     uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1.1.0
     with:
       flexcli-package: "https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2"
+      # api-base-url: "https://staging.example.com"   # optional; default https://api.enilinx.com
     secrets:
       webhook-secret: ${{ secrets.FLEX_MARKETPLACE_WEBHOOK_SECRET }}
 ```
@@ -47,6 +48,7 @@ The marketplace server independently fetches and validates all artifacts from th
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `flexcli-package` | No | `https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2` | Passed to `npm install -g` (tarball URL or `@eniac/flexcli@version` once published) |
+| `api-base-url` | No | `https://api.enilinx.com` | API origin for the marketplace webhook (`{base}/api/v1/plugins/webhook`). Hostname alone (e.g. `api.enilinx.com`) is accepted; `https` is assumed |
 
 ## Secrets
 

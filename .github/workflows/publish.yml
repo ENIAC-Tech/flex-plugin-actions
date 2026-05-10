@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: "https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2"
+      api-base-url:
+        description: "FlexStudio API base URL or hostname (no trailing slash). Webhook: {base}/api/v1/plugins/webhook. May omit scheme (https assumed)."
+        type: string
+        required: false
+        default: "https://api.enilinx.com"
     secrets:
       webhook-secret:
         description: "HMAC secret for notifying the FlexStudio marketplace server"
@@ -136,7 +141,19 @@ jobs:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
           DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          MARKETPLACE_API_BASE: ${{ inputs.api-base-url }}
         run: |
+          API_BASE="${MARKETPLACE_API_BASE:-}"
+          if [ -z "$API_BASE" ]; then
+            API_BASE="https://api.enilinx.com"
+          fi
+          API_BASE="${API_BASE%/}"
+          case "$API_BASE" in
+            http://*|https://*) ;;
+            *) API_BASE="https://${API_BASE}" ;;
+          esac
+          WEBHOOK_URL="${API_BASE}/api/v1/plugins/webhook"
+
           PAYLOAD=$(node -e "
             const crypto = require('crypto');
             const manifest = require('./manifest.json');
@@ -161,4 +178,4 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: sha256=$SIG" \
             -d "$BODY" \
-            https://api.flexstudio.app/api/v1/plugins/webhook
+            "$WEBHOOK_URL"
