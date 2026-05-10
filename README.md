@@ -15,9 +15,9 @@ on:
 
 jobs:
   publish:
-    uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1
+    uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1.1.0
     with:
-      flexcli-version: "latest"   # optional, pin to a specific version
+      flexcli-package: "https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2"
     secrets:
       webhook-secret: ${{ secrets.FLEX_MARKETPLACE_WEBHOOK_SECRET }}
 ```
@@ -46,7 +46,7 @@ The marketplace server independently fetches and validates all artifacts from th
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `flexcli-version` | No | `latest` | Version of `@eniac/flexcli` to install |
+| `flexcli-package` | No | `https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2` | Passed to `npm install -g` (tarball URL or `@eniac/flexcli@version` once published) |
 
 ## Secrets
 
@@ -70,7 +70,7 @@ Set `native: true` in `manifest.json` to enable the matrix build. The workflow m
 It is strongly recommended to pin to a specific release tag rather than `@main`:
 
 ```yaml
-uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1
+uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1.1.0
 ```
 
 The marketplace server rejects workflow references that use `@main` or other mutable refs.

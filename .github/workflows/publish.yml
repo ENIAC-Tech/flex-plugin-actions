@@ -3,11 +3,11 @@ name: Publish FlexStudio Plugin
 on:
   workflow_call:
     inputs:
-      flexcli-version:
-        description: "Version of @eniac/flexcli to use"
+      flexcli-package:
+        description: "Argument to npm install -g (GitHub tarball URL or @eniac/flexcli@version)"
         type: string
         required: false
-        default: "latest"
+        default: "https://github.com/ENIAC-Tech/flexcli/tarball/refs/heads/v2"
     secrets:
       webhook-secret:
         description: "HMAC secret for notifying the FlexStudio marketplace server"
@@ -52,7 +52,7 @@ jobs:
         run: npm ci
 
       - name: Install flexcli
-        run: npm install -g @eniac/flexcli@${{ inputs.flexcli-version }}
+        run: npm install -g "${{ inputs.flexcli-package }}"
 
       - name: Build
         run: npm run build
@@ -99,7 +99,7 @@ jobs:
         run: npm ci
 
       - name: Install flexcli
-        run: npm install -g @eniac/flexcli@${{ inputs.flexcli-version }}
+        run: npm install -g "${{ inputs.flexcli-package }}"
 
       - name: Build
         run: npm run build
