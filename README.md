@@ -74,3 +74,7 @@ uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1.1.0
 ```
 
 The marketplace server rejects workflow references that use `@main` or other mutable refs.
+
+## Migrating from workflow `@v1`
+
+Reusable workflow `@v1` expects the legacy npm-only flexcli install. Plugin scaffolding that uses `flexcli plugin-v2` should pin **`@v1.1.0`** (or newer) and pass **`flexcli-package`** (see usage example above). The previous input `flexcli-version` was removed in favor of `flexcli-package`.
