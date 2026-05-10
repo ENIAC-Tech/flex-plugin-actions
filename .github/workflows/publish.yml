@@ -141,7 +141,7 @@ jobs:
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
           DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-          MARKETPLACE_API_BASE: ${{ inputs['api-base-url'] }}
+          MARKETPLACE_API_BASE: ${{ inputs.api-base-url }}
         run: |
           API_BASE="${MARKETPLACE_API_BASE:-}"
           if [ -z "$API_BASE" ]; then
@@ -173,7 +173,7 @@ jobs:
           BODY=$(echo "$PAYLOAD" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.payload)")
           SIG=$(echo "$PAYLOAD" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); process.stdout.write(d.sig)")
 
-          curl -fsS \
+          curl -fsSL \
             -X POST \
             -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: sha256=$SIG" \
