@@ -15,7 +15,7 @@ on:
 
 jobs:
   publish:
-    uses: eniacelec/flex-plugin-actions/.github/workflows/publish.yml@v1
+    uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1
     with:
       flexcli-version: "latest"   # optional, pin to a specific version
     secrets:
@@ -70,7 +70,7 @@ Set `native: true` in `manifest.json` to enable the matrix build. The workflow m
 It is strongly recommended to pin to a specific release tag rather than `@main`:
 
 ```yaml
-uses: eniacelec/flex-plugin-actions/.github/workflows/publish.yml@v1
+uses: ENIAC-Tech/flex-plugin-actions/.github/workflows/publish.yml@v1
 ```
 
 The marketplace server rejects workflow references that use `@main` or other mutable refs.

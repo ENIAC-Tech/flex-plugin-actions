@@ -64,12 +64,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plugin-universal
-          path: "*.flexplugin"
+          path: "release/*.flexplugin"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.flexplugin"
+          files: "release/*.flexplugin"
 
   # ── Build (native — per-platform matrix) ────────────────────────────────────
   build-native:
@@ -111,12 +111,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plugin-${{ matrix.platform }}
-          path: "*.flexplugin"
+          path: "release/*.flexplugin"
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "*.flexplugin"
+          files: "release/*.flexplugin"
 
   # ── Notify marketplace server ────────────────────────────────────────────────
   notify:
@@ -139,11 +139,13 @@ jobs:
         run: |
           PAYLOAD=$(node -e "
             const crypto = require('crypto');
+            const manifest = require('./manifest.json');
             const payload = JSON.stringify({
               repo_url: process.env.REPO_URL,
               tag: process.env.RELEASE_TAG,
+              manifest_uuid: manifest.uuid,
               delivery_id: process.env.DELIVERY_ID,
-              timestamp: Date.now()
+              timestamp: Math.floor(Date.now() / 1000)
             });
             const sig = crypto
               .createHmac('sha256', process.env.WEBHOOK_SECRET)
@@ -157,7 +159,6 @@ jobs:
           curl -fsSL \
             -X POST \
             -H "Content-Type: application/json" \
-            -H "X-Flex-Signature: sha256=$SIG" \
-            -H "X-Flex-Delivery: $DELIVERY_ID" \
+            -H "X-Hub-Signature-256: sha256=$SIG" \
             -d "$BODY" \
-            https://api.flexstudio.app/plugins/webhook
+            https://api.flexstudio.app/api/v1/plugins/webhook
