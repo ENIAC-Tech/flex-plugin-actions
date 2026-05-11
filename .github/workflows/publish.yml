@@ -19,6 +19,59 @@ on:
         required: true
 
 jobs:
+  # ── First-release gate (skip marketplace notify on first published non-draft release) ─
+  release-context:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      skip_notify: ${{ steps.query.outputs.skip_notify }}
+    steps:
+      - name: Count prior published (non-draft) releases
+        id: query
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          current_tag="${{ github.ref_name }}"
+          api="${GITHUB_API_URL:-https://api.github.com}/repos/${{ github.repository }}/releases"
+          page=1
+          prior=0
+          ok=1
+          while true; do
+            if ! chunk="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}?per_page=100&page=${page}")"; then
+              ok=0
+              break
+            fi
+            len="$(echo "$chunk" | jq 'length')"
+            if [ "$len" -eq 0 ]; then
+              break
+            fi
+            c="$(echo "$chunk" | jq --arg t "$current_tag" '[.[] | select(.draft == false and .tag_name != $t)] | length')"
+            prior=$((prior + c))
+            if [ "$len" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+          echo "prior_published_release_count=${prior}" >> "$GITHUB_OUTPUT"
+          if [ "$ok" -ne 1 ]; then
+            echo "skip_notify=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list releases from GitHub API; marketplace notify will run."
+            exit 0
+          fi
+          if [ "$prior" -eq 0 ]; then
+            echo "skip_notify=true" >> "$GITHUB_OUTPUT"
+            echo "Skipping marketplace notify: no earlier published (non-draft) releases before this tag (first Actions submit)."
+          else
+            echo "skip_notify=false" >> "$GITHUB_OUTPUT"
+            echo "Marketplace notify will run (prior_published_release_count=${prior})."
+          fi
+
   # ── Detect manifest ──────────────────────────────────────────────────────────
   detect:
     runs-on: ubuntu-latest
@@ -45,6 +98,10 @@ jobs:
     needs: detect
     if: needs.detect.outputs.native == 'false'
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -64,6 +121,11 @@ jobs:
 
       - name: Pack
         run: flexcli plugin-v2 pack
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*.flexplugin"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -92,6 +154,10 @@ jobs:
           - platform: linux-x64
             os: ubuntu-latest
     runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -112,6 +178,11 @@ jobs:
       - name: Pack
         run: flexcli plugin-v2 pack --platform ${{ matrix.platform }}
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*.flexplugin"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -125,9 +196,10 @@ jobs:
 
   # ── Notify marketplace server ────────────────────────────────────────────────
   notify:
-    needs: [detect, build-universal, build-native]
+    needs: [detect, build-universal, build-native, release-context]
     if: |
       always() &&
+      needs.release-context.outputs.skip_notify != 'true' &&
       (needs.build-universal.result == 'success' || needs.build-universal.result == 'skipped') &&
       (needs.build-native.result == 'success' || needs.build-native.result == 'skipped') &&
       (needs.build-universal.result == 'success' || needs.build-native.result == 'success')
