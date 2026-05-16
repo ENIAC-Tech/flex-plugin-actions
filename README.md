@@ -35,11 +35,15 @@ jobs:
 
 Create a GitHub Release with a semver tag (e.g. `v1.2.0`). The workflow runs automatically and:
 
-1. Reads `manifest.json` to detect `native` and `platforms`
-2. For non-native plugins: builds once on Ubuntu, produces a universal `.flexplugin`
-3. For native plugins: runs a matrix build across all declared platforms in parallel
-4. Uploads `.flexplugin` artifact(s) to the GitHub Release
-5. Sends a signed webhook notification to the marketplace server
+1. Verifies that the release tag version matches `package.json` `version`
+2. Reads `manifest.json` to detect `native` and `platforms`
+3. For non-native plugins: builds once on Ubuntu, produces a universal `.flexplugin`
+4. For native plugins: runs a matrix build across all declared platforms in parallel
+5. Uploads `.flexplugin` artifact(s) to the GitHub Release
+6. Sends a signed webhook notification to the marketplace server
+
+The tag may use a leading `v` (`v1.2.0`) or the bare package version (`1.2.0`).
+If the normalized tag version differs from `package.json` `version`, CI fails before building.
 
 The marketplace server independently fetches and validates all artifacts from the Release — it does not trust the workflow payload beyond the notification event itself.
 
