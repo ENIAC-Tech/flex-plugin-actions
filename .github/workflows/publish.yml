@@ -78,6 +78,7 @@ jobs:
     outputs:
       native: ${{ steps.read.outputs.native }}
       platforms: ${{ steps.read.outputs.platforms }}
+      native_matrix: ${{ steps.read.outputs.native_matrix }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,8 +118,25 @@ jobs:
             const p = m.native ? (m.platforms || ['win32-x64','darwin-arm64','darwin-x64','linux-x64']) : ['universal'];
             console.log(JSON.stringify(p));
           ")
+          NATIVE_MATRIX=$(node -e "
+            const m=require('./manifest.json');
+            const osByPlatform = {
+              'win32-x64': 'windows-latest',
+              'darwin-arm64': 'macos-latest',
+              'darwin-x64': 'macos-13',
+              'linux-x64': 'ubuntu-latest'
+            };
+            const platforms = m.native ? (m.platforms || Object.keys(osByPlatform)) : [];
+            const unknown = platforms.filter((platform) => !osByPlatform[platform]);
+            if (unknown.length) {
+              console.error('Unsupported native platform(s): ' + unknown.join(', '));
+              process.exit(1);
+            }
+            console.log(JSON.stringify({ include: platforms.map((platform) => ({ platform, os: osByPlatform[platform] })) }));
+          ")
           echo "native=$NATIVE" >> "$GITHUB_OUTPUT"
           echo "platforms=$PLATFORMS" >> "$GITHUB_OUTPUT"
+          echo "native_matrix=$NATIVE_MATRIX" >> "$GITHUB_OUTPUT"
 
   # ── Build (universal — non-native plugins) ───────────────────────────────────
   build-universal:
@@ -170,16 +188,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.native == 'true'
     strategy:
-      matrix:
-        include:
-          - platform: win32-x64
-            os: windows-latest
-          - platform: darwin-arm64
-            os: macos-latest
-          - platform: darwin-x64
-            os: macos-13
-          - platform: linux-x64
-            os: ubuntu-latest
+      matrix: ${{ fromJSON(needs.detect.outputs.native_matrix) }}
     runs-on: ${{ matrix.os }}
     permissions:
       id-token: write
